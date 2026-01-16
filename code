@@ -1,0 +1,155 @@
+Sales Performance Analysis Script
+Author: Mark Kipchumba
+Date: 2025
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from datetime import datetime
+
+ #Set style
+sns.set_style("whitegrid")
+plt.rcParams['figure.figsize'] = (12, 8)
+
+class SalesAnalyzer:
+    def __init__(self, data_path):
+        """Initialize analyzer with sales data"""
+        self.df = pd.read_csv(data_path)
+        self.df['OrderDate'] = pd.to_datetime(self.df['OrderDate'])
+        
+    def clean_data(self):
+        """Clean and prepare sales data"""
+        # Remove duplicates
+        self.df = self.df.drop_duplicates()
+        
+        # Handle missing values
+        self.df['Revenue'] = self.df['Revenue'].fillna(0)
+        self.df['Quantity'] = self.df['Quantity'].fillna(0)
+        
+        # Create new features
+        self.df['Month'] = self.df['OrderDate'].dt.month
+        self.df['Quarter'] = self.df['OrderDate'].dt.quarter
+        self.df['Year'] = self.df['OrderDate'].dt.year
+        
+        return self.df
+    
+    def analyze_regional_sales(self):
+        """Analyze sales by region"""
+        regional_sales = self.df.groupby('Region').agg({
+            'Revenue': 'sum',
+            'Quantity': 'sum',
+            'OrderID': 'count'
+        }).rename(columns={'OrderID': 'TransactionCount'})
+        
+        regional_sales['AvgTransactionValue'] = regional_sales['Revenue'] / regional_sales['TransactionCount']
+        return regional_sales
+    
+    def customer_segmentation(self):
+        """Segment customers by purchase behavior"""
+        customer_stats = self.df.groupby('CustomerID').agg({
+            'Revenue': ['sum', 'mean', 'count'],
+            'OrderDate': ['min', 'max']
+        })
+        
+        # RFM Analysis
+        customer_stats.columns = ['TotalSpent', 'AvgPurchase', 'PurchaseCount', 
+                                 'FirstPurchase', 'LastPurchase']
+        
+        # Calculate recency
+        customer_stats['Recency'] = (self.df['OrderDate'].max() - 
+                                    customer_stats['LastPurchase']).dt.days
+        
+        return customer_stats
+    
+    def sales_trend_analysis(self):
+        """Analyze sales trends over time"""
+        monthly_sales = self.df.set_index('OrderDate').resample('M')['Revenue'].sum()
+        return monthly_sales
+    
+    def generate_report(self):
+        """Generate comprehensive sales report"""
+        print("="*50)
+        print("SALES PERFORMANCE REPORT")
+        print("="*50)
+        
+        # Overall metrics
+        total_revenue = self.df['Revenue'].sum()
+        total_transactions = self.df['OrderID'].nunique()
+        avg_transaction = total_revenue / total_transactions
+        
+        print(f"\n📈 Overall Performance:")
+        print(f"   Total Revenue: ${total_revenue:,.2f}")
+        print(f"   Total Transactions: {total_transactions:,}")
+        print(f"   Average Transaction: ${avg_transaction:.2f}")
+        
+        # Regional analysis
+        regional = self.analyze_regional_sales()
+        print(f"\n🌍 Regional Performance:")
+        for region in regional.index:
+            rev = regional.loc[region, 'Revenue']
+            print(f"   {region}: ${rev:,.2f}")
+        
+        # Top products
+        top_products = self.df.groupby('ProductName')['Revenue'].sum().nlargest(5)
+        print(f"\n🏆 Top 5 Products:")
+        for product, revenue in top_products.items():
+            print(f"   {product}: ${revenue:,.2f}")
+        
+        return {
+            'total_revenue': total_revenue,
+            'total_transactions': total_transactions,
+            'regional_sales': regional,
+            'top_products': top_products
+        }
+
+def main():
+    """Main execution function"""
+    print("🚀 Sales Performance Analysis Starting...")
+    
+    # Initialize analyzer
+    analyzer = SalesAnalyzer('data/sales_data.csv')
+    
+    # Clean data
+    print("🧹 Cleaning data...")
+    clean_df = analyzer.clean_data()
+    print(f"✅ Cleaned {len(clean_df)} records")
+    
+    # Generate report
+    print("\n📊 Generating sales report...")
+    report = analyzer.generate_report()
+    
+    # Create visualizations
+    print("\n🎨 Creating visualizations...")
+    
+    # Regional sales chart
+    regional_sales = analyzer.analyze_regional_sales()
+    plt.figure(figsize=(10, 6))
+    regional_sales['Revenue'].plot(kind='bar', color='skyblue')
+    plt.title('Sales Revenue by Region', fontsize=16)
+    plt.xlabel('Region')
+    plt.ylabel('Revenue ($)')
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.savefig('dashboard/regional_sales.png', dpi=300, bbox_inches='tight')
+    
+    # Monthly sales trend
+    monthly_sales = analyzer.sales_trend_analysis()
+    plt.figure(figsize=(12, 6))
+    monthly_sales.plot(kind='line', marker='o', color='green')
+    plt.title('Monthly Sales Trend', fontsize=16)
+    plt.xlabel('Month')
+    plt.ylabel('Revenue ($)')
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig('dashboard/monthly_trend.png', dpi=300, bbox_inches='tight')
+    
+    print("\n✅ Analysis complete!")
+    print("📁 Files generated:")
+    print("   - regional_sales.png")
+    print("   - monthly_trend.png")
+    
+    return report
+
+if __name__ == "__main__":
+    main()
