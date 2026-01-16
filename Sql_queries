@@ -1,0 +1,74 @@
+SQL Queries for Sales Data Analysis
+Author: Mark Kipchumba
+Date: 2025
+1. MONTHLY SALES PERFORMANCE
+SELECT 
+    YEAR(OrderDate) AS Year,
+    MONTH(OrderDate) AS Month,
+    COUNT(DISTINCT OrderID) AS TransactionCount,
+    SUM(Revenue) AS TotalRevenue,
+    AVG(Revenue) AS AverageRevenue,
+    COUNT(DISTINCT CustomerID) AS UniqueCustomers
+FROM Sales
+WHERE OrderDate >= DATEADD(year, -1, GETDATE())
+GROUP BY YEAR(OrderDate), MONTH(OrderDate)
+ORDER BY Year DESC, Month DESC;
+
+-- 2. REGIONAL PERFORMANCE ANALYSIS
+SELECT 
+    Region,
+    COUNT(DISTINCT CustomerID) AS CustomerCount,
+    SUM(Revenue) AS TotalRevenue,
+    AVG(Revenue) AS AvgTransactionValue,
+    SUM(Revenue) / COUNT(DISTINCT CustomerID) AS RevenuePerCustomer
+FROM Sales
+GROUP BY Region
+ORDER BY TotalRevenue DESC;
+
+-- 3. TOP PERFORMING PRODUCTS
+SELECT 
+    ProductCategory,
+    ProductName,
+    SUM(Quantity) AS TotalUnitsSold,
+    SUM(Revenue) AS TotalRevenue,
+    AVG(UnitPrice) AS AveragePrice
+FROM Sales
+GROUP BY ProductCategory, ProductName
+ORDER BY TotalRevenue DESC
+LIMIT 20;
+
+-- 4. CUSTOMER SEGMENTATION (RFM ANALYSIS)
+WITH CustomerRFM AS (
+    SELECT 
+        CustomerID,
+        DATEDIFF(day, MAX(OrderDate), GETDATE()) AS Recency,
+        COUNT(DISTINCT OrderID) AS Frequency,
+        SUM(Revenue) AS MonetaryValue
+    FROM Sales
+    GROUP BY CustomerID
+)
+SELECT 
+    CustomerID,
+    Recency,
+    Frequency,
+    MonetaryValue,
+    NTILE(4) OVER (ORDER BY Recency DESC) AS R_Score,
+    NTILE(4) OVER (ORDER BY Frequency) AS F_Score,
+    NTILE(4) OVER (ORDER BY MonetaryValue) AS M_Score,
+    (NTILE(4) OVER (ORDER BY Recency DESC) * 100) + 
+    (NTILE(4) OVER (ORDER BY Frequency) * 10) + 
+    NTILE(4) OVER (ORDER BY MonetaryValue) AS RFM_Score
+FROM CustomerRFM;
+
+-- 5. SALES TREND BY PRODUCT CATEGORY
+SELECT 
+    ProductCategory,
+    DATEPART(quarter, OrderDate) AS Quarter,
+    YEAR(OrderDate) AS Year,
+    SUM(Revenue) AS QuarterlyRevenue,
+    LAG(SUM(Revenue), 1) OVER (PARTITION BY ProductCategory ORDER BY YEAR(OrderDate), DATEPART(quarter, OrderDate)) AS PreviousQuarterRevenue,
+    ((SUM(Revenue) - LAG(SUM(Revenue), 1) OVER (PARTITION BY ProductCategory ORDER BY YEAR(OrderDate), DATEPART(quarter, OrderDate))) / 
+     LAG(SUM(Revenue), 1) OVER (PARTITION BY ProductCategory ORDER BY YEAR(OrderDate), DATEPART(quarter, OrderDate))) * 100 AS GrowthPercentage
+FROM Sales
+GROUP BY ProductCategory, YEAR(OrderDate), DATEPART(quarter, OrderDate)
+ORDER BY ProductCategory, Year, Quarter;
